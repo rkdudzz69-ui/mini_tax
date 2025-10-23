@@ -28,7 +28,7 @@ SAMPLE_DATA = {
 }
 
 # ==============================
-# 유틸 함수
+# 유틸
 # ==============================
 @st.cache_data(show_spinner=False)
 def load_df_from_file(file) -> pd.DataFrame:
@@ -96,20 +96,20 @@ page = st.sidebar.radio(
 )
 
 # ==============================
-# 1) 사업자 조회
+# 1) 사업자 조회 (다중 입력 + 컴팩트 입력칸 + 가로 버튼)
 # ==============================
 def render_search(df: pd.DataFrame):
     st.markdown("## 🔎 사업자 조회")
     st.caption("여러 명/여러 조건을 한 번에 검색할 수 있어요. 각 입력칸은 상호·대표자·사업자번호·주민번호에 부분 일치로 매칭됩니다.")
 
-    # 매칭 방식
+    # 매칭 방식 (각 입력칸 내부의 여러 키워드 간)
     match_mode = st.radio("매칭 방식 (각 입력칸에 적용)", ["부분 포함(AND)", "부분 포함(OR)"], horizontal=True)
 
-    # 세션 초기화
+    # 여러 입력칸 상태
     if "multi_queries" not in st.session_state:
         st.session_state.multi_queries = [""]
 
-    # --- 버튼 스타일 (가로로 넓게, 줄바꿈 금지) ---
+    # ---- 버튼 스타일(전역 적용): 가로폭 넓힘 + 줄바꿈 방지 + 중앙정렬 ----
     st.markdown("""
         <style>
         div.stButton > button {
@@ -117,74 +117,45 @@ def render_search(df: pd.DataFrame):
             height: 40px !important;
             font-size: 16px !important;
             font-weight: 600 !important;
-            white-space: nowrap !important;  /* ✅ 줄바꿈 방지 */
+            white-space: nowrap !important;   /* 줄바꿈 방지 */
             color: #222 !important;
             background-color: #FFFFFF !important;
             border: 1px solid #CCCCCC !important;
             border-radius: 8px !important;
-            display: flex !important;
+            display: inline-flex !important;
             align-items: center !important;
             justify-content: center !important;
         }
-        div.stButton { display: flex !important; justify-content: center !important; }
         </style>
     """, unsafe_allow_html=True)
 
-    # 버튼
-    # ---- 입력칸 추가 / 삭제 (가로 직렬, 줄바꿈 금지, 여백 확보) ----
-st.caption("입력칸 추가 / 삭제")
+    # 버튼(가로로 나란히 + 간격용 스페이서 컬럼)
+    st.caption("입력칸 추가 / 삭제")
+    col_add, spacer, col_del, _ = st.columns([0.20, 0.06, 0.20, 1])
+    with col_add:
+        if st.button("+행추가", key="add_query", use_container_width=False):
+            st.session_state.multi_queries.append("")
+    with col_del:
+        if st.button("-행삭제", key="del_query", use_container_width=False) and len(st.session_state.multi_queries) > 1:
+            st.session_state.multi_queries.pop()
 
-# 스타일: 버튼 폭 고정 + 줄바꿈 방지 + 가운데 정렬 + 버튼 간 여백
-st.markdown("""
-    <style>
-    .btn-row {                   /* 버튼들을 담는 행 */
-        display: flex;
-        justify-content: center; /* 중앙 정렬 */
-        align-items: center;
-        gap: 24px;               /* 버튼 사이 간격 */
-        margin-bottom: 8px;
-    }
-    .btn-row .stButton>button {  /* 버튼 자체 스타일 */
-        min-width: 120px;        /* ✅ 가로폭 확보 → 글자 줄바꿈 방지 */
-        height: 40px;
-        white-space: nowrap;     /* ✅ 줄바꿈 금지 */
-        font-size: 16px;
-        font-weight: 600;
-        border-radius: 8px;
-    }
-    </style>
-""", unsafe_allow_html=True)
-
-# 버튼 2개를 한 행에 직렬 배치
-st.markdown('<div class="btn-row">', unsafe_allow_html=True)
-
-col_add, col_del = st.columns(2)
-with col_add:
-    if st.button("+행추가", key="add_query"):
-        st.session_state.multi_queries.append("")
-with col_del:
-    if st.button("-행삭제", key="del_query") and len(st.session_state.multi_queries) > 1:
-        st.session_state.multi_queries.pop()
-
-st.markdown('</div>', unsafe_allow_html=True)
-
-    # 입력칸 (가로 폭 줄임)
+    # 컴팩트한 검색 입력칸들 (text_input, 폭 줄이기 위해 좌측 컬럼만 사용)
     new_vals = []
     for i, val in enumerate(st.session_state.multi_queries):
         st.markdown(f"**검색어 #{i+1}**")
-        c_in, _ = st.columns([1, 2])
+        c_in, _ = st.columns([1, 2])  # 왼쪽만 사용 → 폭이 자연스럽게 좁아짐
         with c_in:
             new_vals.append(
                 st.text_input(
                     label="",
                     value=val,
-                    placeholder="예) 홍길동 1111111111 8001011234567",
+                    placeholder="예) 홍길동 1111111111 8001011234567 (공백으로 여러 키워드)",
                     key=f"query_input_{i}",
                 )
             )
     st.session_state.multi_queries = new_vals
 
-    # 검색 로직
+    # -------- 검색 로직 --------
     work = df.copy()
     work["_bnum_d"] = work["사업자번호"].apply(digits_only)
     work["_rrn_d"] = work["주민번호"].apply(digits_only)
@@ -214,7 +185,7 @@ st.markdown('</div>', unsafe_allow_html=True)
 
         return work.apply(row_match, axis=1)
 
-    # 결과 결합
+    # 여러 입력칸 결과 OR(합집합) 결합
     masks = [mask_for_one_query(q) for q in st.session_state.multi_queries]
     if any(m.any() for m in masks):
         final_mask = pd.Series(False, index=work.index)
@@ -224,15 +195,15 @@ st.markdown('</div>', unsafe_allow_html=True)
     else:
         result = work.iloc[0:0]
 
-    # 결과 표시
+    # 결과 표시 & 다운로드
     c1, c2 = st.columns(2)
     c1.metric("업로드 행 수", len(df))
     c2.metric("검색 결과 수", len(result))
 
     if all((q.strip() == "") for q in st.session_state.multi_queries):
-        st.info("검색어를 하나 이상 입력해 주세요. 여러 명을 찾으려면 ‘+행추가’를 눌러 주세요.")
+        st.info("검색어를 하나 이상 입력해 주세요. 여러 명을 찾으려면 ‘+행추가’ 버튼으로 입력칸을 추가하세요.")
     elif result.empty:
-        st.warning("검색 결과가 없습니다.")
+        st.warning("검색 결과가 없습니다. 철자 또는 하이픈(-) 유무를 확인해보세요.")
 
     cols = ["상호", "사업자번호", "대표자", "주민번호", "사업자상태", "폐업일자"]
     cols = [c for c in cols if c in result.columns]
@@ -247,10 +218,194 @@ st.markdown('</div>', unsafe_allow_html=True)
         )
 
 # ==============================
-# (다른 카테고리: 폐업자 조회, 통계, 중복, 챗봇)
+# 2) 전체 폐업자 조회
 # ==============================
-# 그대로 유지 – 위 코드와 동일하게 기존에 쓰던 걸 두면 돼 (너무 길어 생략)
-# render_closed_list(), render_closed_by_year(), render_duplicates(), render_chatbot()
+def render_closed_list(df: pd.DataFrame):
+    st.markdown("## 📋 전체 폐업자 조회")
+
+    closed = df[df["사업자상태"].astype(str).str.strip() == "폐업"].copy()
+
+    enable_range = st.checkbox("폐업일자 기간으로 필터", value=False)
+    if enable_range:
+        min_d = pd.to_datetime(closed["폐업일자(파싱)"]).min()
+        max_d = pd.to_datetime(closed["폐업일자(파싱)"]).max()
+        c1, c2 = st.columns(2)
+        start_date = c1.date_input("시작일", value=min_d.date() if pd.notna(min_d) else None)
+        end_date = c2.date_input("종료일", value=max_d.date() if pd.notna(max_d) else None)
+        if start_date and end_date:
+            m = (closed["폐업일자(파싱)"] >= pd.to_datetime(start_date)) & (closed["폐업일자(파싱)"] <= pd.to_datetime(end_date))
+            closed = closed[m]
+
+    c1, c2 = st.columns(2)
+    c1.metric("폐업자 수", len(closed))
+    c2.metric("전체 대비 폐업 비율", f"{(len(closed)/len(df)*100):.1f}%" if len(df) else "0.0%")
+
+    cols = ["상호", "사업자번호", "대표자", "주민번호", "사업자상태", "폐업일자"]
+    cols = [c for c in cols if c in closed.columns]
+    st.dataframe(closed.reindex(columns=cols), use_container_width=True)
+
+    st.download_button(
+        "⬇️ 폐업자 목록 CSV 다운로드",
+        data=closed.reindex(columns=cols).to_csv(index=False).encode("utf-8-sig"),
+        file_name="전체_폐업자_목록.csv",
+        mime="text/csv"
+    )
+
+# ==============================
+# 3) 연도별 폐업자 수 통계
+# ==============================
+def render_closed_by_year(df: pd.DataFrame):
+    st.markdown("## 📈 연도별 폐업자 수 통계")
+
+    closed = df[df["사업자상태"].astype(str).str.strip() == "폐업"].copy()
+    closed["폐업연도"] = pd.to_datetime(closed["폐업일자"], errors="coerce").dt.year
+
+    years = sorted([int(y) for y in closed["폐업연도"].dropna().unique()]) if not closed.empty else []
+    if years:
+        y1, y2 = st.select_slider("연도 범위", options=years, value=(years[0], years[-1]))
+        closed = closed[closed["폐업연도"].between(y1, y2)]
+    else:
+        st.info("폐업 연도 정보가 없습니다.")
+
+    agg = (
+        closed["폐업연도"]
+        .dropna()
+        .value_counts()
+        .sort_index()
+        .rename_axis("연도")
+        .reset_index(name="폐업자 수")
+    )
+
+    st.dataframe(agg, use_container_width=True)
+    if not agg.empty:
+        st.bar_chart(agg.set_index("연도"))
+
+    st.download_button(
+        "⬇️ 연도별 통계 CSV 다운로드",
+        data=agg.to_csv(index=False).encode("utf-8-sig"),
+        file_name="연도별_폐업자_통계.csv",
+        mime="text/csv"
+    )
+
+# ==============================
+# 4) 동일 사업자(대표자/주민번호) 내역
+# ==============================
+def render_duplicates(df: pd.DataFrame):
+    st.markdown("## 👥 동일 사업자(대표자/주민번호) 내역")
+
+    dup_by_owner = df.groupby("대표자", dropna=False).size().reset_index(name="건수")
+    dup_by_owner = dup_by_owner[dup_by_owner["건수"] > 1].sort_values("건수", ascending=False)
+
+    dup_by_rrn = df.groupby("주민번호", dropna=False).size().reset_index(name="건수")
+    dup_by_rrn = dup_by_rrn[dup_by_rrn["건수"] > 1].sort_values("건수", ascending=False)
+
+    st.subheader("중복 요약")
+    c1, c2 = st.columns(2)
+    with c1:
+        st.markdown("**대표자 기준 중복**")
+        st.dataframe(dup_by_owner, use_container_width=True, height=260)
+    with c2:
+        st.markdown("**주민번호 기준 중복**")
+        st.dataframe(dup_by_rrn, use_container_width=True, height=260)
+
+    st.download_button(
+        "⬇️ 대표자 중복 요약 CSV",
+        data=dup_by_owner.to_csv(index=False).encode("utf-8-sig"),
+        file_name="대표자_중복_요약.csv",
+        mime="text/csv"
+    )
+    st.download_button(
+        "⬇️ 주민번호 중복 요약 CSV",
+        data=dup_by_rrn.to_csv(index=False).encode("utf-8-sig"),
+        file_name="주민번호_중복_요약.csv",
+        mime="text/csv"
+    )
+
+    st.subheader("상세 조회")
+    mode_key = st.radio("조회 기준", ["대표자", "주민번호"], horizontal=True)
+    if mode_key == "대표자":
+        options = dup_by_owner["대표자"].tolist()
+        sel = st.selectbox("대표자 선택", options=options if options else ["(중복 없음)"])
+        detail = df[df["대표자"] == sel].copy() if options else df.iloc[0:0]
+    else:
+        options = dup_by_rrn["주민번호"].tolist()
+        sel = st.selectbox("주민번호 선택", options=options if options else ["(중복 없음)"])
+        detail = df[df["주민번호"] == sel].copy() if options else df.iloc[0:0]
+
+    cols = ["상호", "사업자번호", "대표자", "주민번호", "사업자상태", "폐업일자"]
+    cols = [c for c in cols if c in detail.columns]
+    st.dataframe(detail.reindex(columns=cols), use_container_width=True)
+
+    if not detail.empty:
+        st.download_button(
+            "⬇️ 상세 내역 CSV 다운로드",
+            data=detail.reindex(columns=cols).to_csv(index=False).encode("utf-8-sig"),
+            file_name=f"동일사업자_상세_{mode_key}.csv",
+            mime="text/csv"
+        )
+
+# ==============================
+# 5) 🤖 챗봇 (OpenAI)
+# ==============================
+def render_chatbot():
+    st.markdown("## 🤖 챗봇")
+    st.caption("OpenAI API 키를 입력하고 아래에서 질문해 봐. (키는 세션에만 저장)")
+
+    if "chat_messages" not in st.session_state:
+        st.session_state.chat_messages = []
+    if "openai_api_key" not in st.session_state:
+        st.session_state.openai_api_key = ""
+
+    key = st.text_input("OpenAI API Key", type="password", placeholder="sk-...", value=st.session_state.openai_api_key)
+    if key != st.session_state.openai_api_key:
+        st.session_state.openai_api_key = key
+
+    model = st.selectbox("모델 선택", ["gpt-4o-mini", "gpt-4o", "gpt-4.1-mini", "gpt-4.1"], index=0)
+    st.divider()
+
+    for msg in st.session_state.chat_messages:
+        with st.chat_message("user" if msg["role"] == "user" else "assistant"):
+            st.markdown(msg["content"])
+
+    prompt = st.chat_input("무엇이든 물어봐! (예: 특정 대표자의 폐업 연도만 추려줘)")
+    if prompt:
+        if not st.session_state.openai_api_key:
+            st.warning("먼저 OpenAI API 키를 입력해 줘.")
+            return
+        if OpenAI is None:
+            st.error("openai 패키지가 설치되어 있지 않아. requirements.txt에 openai>=1.0.0 추가해 줘.")
+            return
+
+        st.session_state.chat_messages.append({"role": "user", "content": prompt})
+        with st.chat_message("user"):
+            st.markdown(prompt)
+
+        try:
+            client = OpenAI(api_key=st.session_state.openai_api_key)
+            sys_prompt = (
+                "너는 세무/사업자 데이터 어시스턴트야. "
+                "질문을 명확히 이해하고, 필요하면 표로 간단히 정리해 답해줘."
+            )
+            resp = client.chat.completions.create(
+                model=model,
+                messages=[{"role": "system", "content": sys_prompt}, *st.session_state.chat_messages],
+                temperature=0.3,
+            )
+            answer = resp.choices[0].message.content.strip()
+        except Exception as e:
+            answer = f"오류가 발생했어: {e}"
+
+        st.session_state.chat_messages.append({"role": "assistant", "content": answer})
+        with st.chat_message("assistant"):
+            st.markdown(answer)
+
+        chat_df = pd.DataFrame(st.session_state.chat_messages)
+        st.download_button(
+            "⬇️ 대화 내보내기 (CSV)",
+            data=chat_df.to_csv(index=False).encode("utf-8-sig"),
+            file_name="chat_history.csv",
+            mime="text/csv"
+        )
 
 # ==============================
 # 라우팅
@@ -258,10 +413,10 @@ st.markdown('</div>', unsafe_allow_html=True)
 if page == "사업자 조회":
     render_search(df)
 elif page == "전체 폐업자 조회":
-    st.write("📋 전체 폐업자 조회 페이지 (이전 코드 그대로)")
+    render_closed_list(df)
 elif page == "연도별 폐업자 수 통계":
-    st.write("📈 연도별 통계 페이지 (이전 코드 그대로)")
+    render_closed_by_year(df)
 elif page == "동일 사업자(대표자/주민번호) 내역":
-    st.write("👥 동일 사업자 내역 페이지 (이전 코드 그대로)")
+    render_duplicates(df)
 else:
-    st.write("🤖 챗봇 페이지 (이전 코드 그대로)")
+    render_chatbot()
