@@ -96,7 +96,7 @@ page = st.sidebar.radio(
 )
 
 # ==============================
-# 1) 사업자 조회 (다중 입력 + 넓은 입력칸 + 버튼 색상)
+# 1) 사업자 조회 (다중 입력 + 넓은 입력칸 + 색상 버튼)
 # ==============================
 def render_search(df: pd.DataFrame):
     st.markdown("## 🔎 사업자 조회")
@@ -109,33 +109,30 @@ def render_search(df: pd.DataFrame):
     if "multi_queries" not in st.session_state:
         st.session_state.multi_queries = [""]
 
-    # 버튼 스타일 지정 (CSS)
+    # 버튼 스타일 (＋=빨강, －=파랑)
     st.markdown("""
         <style>
-        div[data-testid="column"]:has(button) {
-            display: flex;
-            align-items: center;
-            justify-content: center;
-        }
+        /* 버튼 공통 스타일 */
         div.stButton > button {
-            width: 45px;
-            height: 45px;
-            font-size: 24px;
+            width: 48px;
+            height: 42px;
+            font-size: 22px;
             border-radius: 10px;
-            font-weight: bold;
+            font-weight: 700;
         }
-        div.stButton > button:first-child {
-            background-color: #FF5C5C !important; /* 빨강 */
-            color: white !important;
+        /* 첫 번째 버튼(추가) 빨강 */
+        div[data-testid="column"] div.stButton:nth-of-type(1) > button {
+            background-color: #FF5C5C !important;
+            color: #FFFFFF !important;
         }
-        div.stButton + div.stButton > button {
-            background-color: #5C9DFF !important; /* 파랑 */
-            color: white !important;
+        /* 두 번째 버튼(삭제) 파랑 */
+        div[data-testid="column"] div.stButton:nth-of-type(2) > button {
+            background-color: #5C9DFF !important;
+            color: #FFFFFF !important;
         }
         </style>
     """, unsafe_allow_html=True)
 
-    # 버튼 UI
     st.caption("입력칸 추가 / 삭제")
     col_add, col_del, _ = st.columns([0.2, 0.2, 4])
     with col_add:
@@ -155,13 +152,13 @@ def render_search(df: pd.DataFrame):
                     label="",
                     value=val,
                     placeholder="예) 홍길동 111-11-11111 800101-1234567 (공백으로 여러 키워드)",
-                    height=50,
+                    height=56,
                     key=f"query_input_{i}",
                 )
             )
     st.session_state.multi_queries = new_vals
 
-    # -------- 검색 로직 --------
+    # 검색 로직
     work = df.copy()
     work["_bnum_d"] = work["사업자번호"].apply(digits_only)
     work["_rrn_d"] = work["주민번호"].apply(digits_only)
@@ -193,7 +190,6 @@ def render_search(df: pd.DataFrame):
 
         return work.apply(row_match, axis=1)
 
-    # 여러 입력칸 결과 OR 결합(합집합)
     masks = [mask_for_one_query(q) for q in st.session_state.multi_queries]
     if any(m.any() for m in masks):
         final_mask = pd.Series(False, index=work.index)
@@ -203,7 +199,7 @@ def render_search(df: pd.DataFrame):
     else:
         result = work.iloc[0:0]
 
-    # -------- 결과 표시 --------
+    # 결과
     c1, c2 = st.columns(2)
     c1.metric("업로드 행 수", len(df))
     c2.metric("검색 결과 수", len(result))
@@ -378,4 +374,30 @@ def render_chatbot():
             )
             answer = resp.choices[0].message.content.strip()
         except Exception as e:
-            answer = f"오류가 발생했어:
+            answer = f"오류가 발생했어: {e}"
+
+        st.session_state.chat_messages.append({"role": "assistant", "content": answer})
+        with st.chat_message("assistant"):
+            st.markdown(answer)
+
+        chat_df = pd.DataFrame(st.session_state.chat_messages)
+        st.download_button(
+            "⬇️ 대화 내보내기 (CSV)",
+            data=chat_df.to_csv(index=False).encode("utf-8-sig"),
+            file_name="chat_history.csv",
+            mime="text/csv"
+        )
+
+# ==============================
+# 라우팅
+# ==============================
+if page == "사업자 조회":
+    render_search(df)
+elif page == "전체 폐업자 조회":
+    render_closed_list(df)
+elif page == "연도별 폐업자 수 통계":
+    render_closed_by_year(df)
+elif page == "동일 사업자(대표자/주민번호) 내역":
+    render_duplicates(df)
+else:
+    render_chatbot()
