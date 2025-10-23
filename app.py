@@ -113,10 +113,10 @@ def render_search(df: pd.DataFrame):
     st.caption("입력칸 추가 / 삭제")
     col_add, col_gap, col_del, _ = st.columns([0.14, 0.06, 0.14, 4])
     with col_add:
-        if st.button("🟥＋", key="add_query", use_container_width=True):
+        if st.button("＋", key="add_query", use_container_width=True):
             st.session_state.multi_queries.append("")
     with col_del:
-        if st.button("🟦－", key="del_query", use_container_width=True) and len(st.session_state.multi_queries) > 1:
+        if st.button("－", key="del_query", use_container_width=True) and len(st.session_state.multi_queries) > 1:
             st.session_state.multi_queries.pop()
 
     # 넓은 입력칸
