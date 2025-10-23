@@ -4,6 +4,12 @@ import re
 import pandas as pd
 import streamlit as st
 
+# ⬇️ (NEW) OpenAI SDK
+try:
+    from openai import OpenAI
+except Exception:
+    OpenAI = None  # 패키지 미설치 시 안내용
+
 # ==============================
 # 공통 기본 설정
 # ==============================
@@ -86,12 +92,12 @@ else:
 st.sidebar.header("카테고리")
 page = st.sidebar.radio(
     "보기 선택",
-    ["사업자 조회", "전체 폐업자 조회", "연도별 폐업자 수 통계", "동일 사업자(대표자/주민번호) 내역"],
+    ["사업자 조회", "전체 폐업자 조회", "연도별 폐업자 수 통계", "동일 사업자(대표자/주민번호) 내역", "🤖 챗봇"],
     index=0
 )
 
 # ==============================
-# 화면 1) 사업자 조회 (기존 AI 검색)
+# 화면 1) 사업자 조회
 # ==============================
 def render_search(df: pd.DataFrame):
     st.markdown("## 🔎 사업자 조회")
@@ -278,6 +284,91 @@ def render_duplicates(df: pd.DataFrame):
         )
 
 # ==============================
+# 화면 5) 🤖 챗봇 (OpenAI)
+# ==============================
+def render_chatbot():
+    st.markdown("## 🤖 챗봇")
+    st.caption("OpenAI API 키를 입력하고 아래에서 질문해 보세요. (키는 세션에만 저장되며 로그로 남기지 않아요)")
+
+    # 세션 상태 준비
+    if "chat_messages" not in st.session_state:
+        st.session_state.chat_messages = []  # [{"role":"user"/"assistant", "content":"..."}]
+    if "openai_api_key" not in st.session_state:
+        st.session_state.openai_api_key = ""
+
+    # API 키 입력
+    key = st.text_input("OpenAI API Key", type="password", placeholder="sk-...", value=st.session_state.openai_api_key)
+    if key != st.session_state.openai_api_key:
+        st.session_state.openai_api_key = key
+
+    # 모델 선택
+    model = st.selectbox(
+        "모델 선택",
+        options=["gpt-4o-mini", "gpt-4o", "gpt-4.1-mini", "gpt-4.1"],
+        index=0
+    )
+
+    st.divider()
+
+    # 기존 대화 출력
+    for msg in st.session_state.chat_messages:
+        with st.chat_message("user" if msg["role"] == "user" else "assistant"):
+            st.markdown(msg["content"])
+
+    # 입력창
+    prompt = st.chat_input("무엇이든 물어보세요. (예: 특정 대표자의 폐업 연도만 추려줘)")
+    if prompt:
+        if not st.session_state.openai_api_key:
+            st.warning("먼저 OpenAI API 키를 입력해 주세요.")
+            return
+        if OpenAI is None:
+            st.error("openai 패키지가 설치되어 있지 않습니다. requirements.txt에 openai>=1.0.0을 추가해 주세요.")
+            return
+
+        # 사용자 메시지 기록 & 표시
+        st.session_state.chat_messages.append({"role": "user", "content": prompt})
+        with st.chat_message("user"):
+            st.markdown(prompt)
+
+        try:
+            client = OpenAI(api_key=st.session_state.openai_api_key)
+
+            # 시스템 프롬프트(선택): 테이블형 데이터 다룰 때 도움되는 안내
+            sys_prompt = (
+                "너는 세무/사업자 데이터 어시스턴트야. "
+                "사용자의 질문을 명확히 이해하고, 필요한 경우 표 형식으로 간단히 정리해서 답해줘. "
+                "모호하면 추가 질문 없이 합리적으로 추정해 요약해줘."
+            )
+
+            # OpenAI 호출
+            resp = client.chat.completions.create(
+                model=model,
+                messages=[
+                    {"role": "system", "content": sys_prompt},
+                    *st.session_state.chat_messages  # user/assistant history 포함
+                ],
+                temperature=0.3,
+            )
+            answer = resp.choices[0].message.content.strip()
+
+        except Exception as e:
+            answer = f"오류가 발생했어요: {e}"
+
+        # 답변 기록 & 표시
+        st.session_state.chat_messages.append({"role": "assistant", "content": answer})
+        with st.chat_message("assistant"):
+            st.markdown(answer)
+
+        # 대화 저장 다운로드
+        chat_df = pd.DataFrame(st.session_state.chat_messages)
+        st.download_button(
+            "⬇️ 대화 내보내기 (CSV)",
+            data=chat_df.to_csv(index=False).encode("utf-8-sig"),
+            file_name="chat_history.csv",
+            mime="text/csv"
+        )
+
+# ==============================
 # 라우팅: 선택한 화면만 렌더
 # ==============================
 if page == "사업자 조회":
@@ -286,5 +377,7 @@ elif page == "전체 폐업자 조회":
     render_closed_list(df)
 elif page == "연도별 폐업자 수 통계":
     render_closed_by_year(df)
-else:
+elif page == "동일 사업자(대표자/주민번호) 내역":
     render_duplicates(df)
+else:  # 🤖 챗봇
+    render_chatbot()
