@@ -1,17 +1,16 @@
-# app.py
 import io
 import re
 import pandas as pd
 import streamlit as st
 
-# ⬇️ (NEW) OpenAI SDK
+# (옵션) OpenAI SDK
 try:
     from openai import OpenAI
 except Exception:
-    OpenAI = None  # 패키지 미설치 시 안내용
+    OpenAI = None  # 설치 안 되어 있으면 안내만
 
 # ==============================
-# 공통 기본 설정
+# 공통 설정
 # ==============================
 st.set_page_config(page_title="사업자 파일 업로드하기", layout="wide")
 st.title("사업자 파일 업로드하기")
@@ -60,25 +59,25 @@ def norm_text(s: str) -> str:
     return (s or "").strip().lower()
 
 # ==============================
-# 데이터 로드 (모든 화면 공통)
+# 데이터 로드
 # ==============================
 file = st.file_uploader("사업내역 파일 업로드 (.xlsx, .xls, .csv)", type=["xlsx", "xls", "csv"])
 if file:
     df = load_df_from_file(file)
 else:
-    st.info("업로드가 없어서 예시 데이터를 사용 중이에요. 실제 파일을 올리면 그걸로 분석해요.")
+    st.info("업로드가 없어서 예시 데이터를 사용 중이야. 실제 파일을 올리면 그걸로 분석해!")
     df = pd.DataFrame(SAMPLE_DATA)
 
 df = normalize_cols(df)
 
-# 필수 컬럼 체크
+# 필수 컬럼
 required = {"상호", "사업자번호", "대표자", "주민번호", "사업자상태"}
 missing = [c for c in required if c not in df.columns]
 if missing:
     st.error(f"필수 컬럼이 없어요: {', '.join(missing)}")
     st.stop()
 
-# 날짜 파싱 (있을 때만)
+# 폐업일자 파싱
 if "폐업일자" in df.columns:
     df["폐업일자"] = df["폐업일자"].replace({"": pd.NA})
     df["폐업일자(파싱)"] = pd.to_datetime(df["폐업일자"], errors="coerce")
@@ -87,7 +86,7 @@ else:
     df["폐업일자(파싱)"] = pd.NaT
 
 # ==============================
-# 페이지 선택 (선택한 화면만 렌더)
+# 사이드바 카테고리
 # ==============================
 st.sidebar.header("카테고리")
 page = st.sidebar.radio(
@@ -97,22 +96,50 @@ page = st.sidebar.radio(
 )
 
 # ==============================
-# 화면 1) 사업자 조회
+# 1) 사업자 조회 (다중 입력 지원)
 # ==============================
 def render_search(df: pd.DataFrame):
     st.markdown("## 🔎 사업자 조회")
-    st.caption("검색할 사업자를 입력해주세요 · 상호/대표자/사업자번호/주민번호로 부분 검색합니다.")
+    st.caption("여러 명/여러 조건을 한 번에 검색할 수 있어. 각 입력칸은 상호·대표자·사업자번호·주민번호에 부분 일치로 매칭돼.")
 
-    q = st.text_input("검색할 사업자를 입력해주세요", placeholder="예) 홍길동 111-11-11111 800101-1234567")
-    mode = st.radio("매칭 방식", ["부분 포함(AND)", "부분 포함(OR)"], horizontal=True)
+    # 매칭 방식(한 칸 안의 키워드 간)
+    match_mode = st.radio("매칭 방식 (각 입력칸에 적용)", ["부분 포함(AND)", "부분 포함(OR)"], horizontal=True)
 
-    search_df = df.copy()
-    if q.strip():
+    # 여러 입력칸(세션 상태)
+    if "multi_queries" not in st.session_state:
+        st.session_state.multi_queries = [""]  # 기본 1칸
+
+    c_add, c_del, _ = st.columns([1,1,6])
+    with c_add:
+        if st.button("＋ 입력칸 추가"):
+            st.session_state.multi_queries.append("")
+    with c_del:
+        if st.button("－ 마지막 제거") and len(st.session_state.multi_queries) > 1:
+            st.session_state.multi_queries.pop()
+
+    # 입력칸 렌더링
+    new_vals = []
+    for i, val in enumerate(st.session_state.multi_queries):
+        new_vals.append(st.text_input(
+            f"검색어 #{i+1}",
+            value=val,
+            placeholder="예) 홍길동 111-11-11111 800101-1234567 (공백으로 여러 키워드)"
+        ))
+    st.session_state.multi_queries = new_vals
+
+    # 작업용 컬럼 준비(숫자 전용)
+    work = df.copy()
+    work["_bnum_d"] = work["사업자번호"].apply(digits_only)
+    work["_rrn_d"] = work["주민번호"].apply(digits_only)
+
+    # 단일 입력칸에 대한 마스크
+    def mask_for_one_query(q: str):
+        q = (q or "").strip()
+        if not q:
+            return pd.Series([False]*len(work), index=work.index)
         terms = [t.strip() for t in q.split() if t.strip()]
-        search_df["_bnum_d"] = search_df["사업자번호"].apply(digits_only)
-        search_df["_rrn_d"] = search_df["주민번호"].apply(digits_only)
 
-        def match_row(row) -> bool:
+        def row_match(row) -> bool:
             hay_text = " ".join([
                 norm_text(row.get("상호", "")),
                 norm_text(row.get("대표자", "")),
@@ -129,41 +156,50 @@ def render_search(df: pd.DataFrame):
                 return ok_txt or ok_dig
 
             checks = [contains(t) for t in terms]
-            return all(checks) if mode.startswith("부분 포함(AND)") else any(checks)
+            return all(checks) if match_mode.startswith("부분 포함(AND)") else any(checks)
 
-        mask = search_df.apply(match_row, axis=1)
-        search_df = search_df.loc[mask].drop(columns=["_bnum_d", "_rrn_d"])
+        return work.apply(row_match, axis=1)
+
+    # 여러 입력칸 결과 OR 결합(합집합)
+    masks = [mask_for_one_query(q) for q in st.session_state.multi_queries]
+    if any(m.any() for m in masks):
+        final_mask = pd.Series(False, index=work.index)
+        for m in masks:
+            final_mask |= m
+        result = work.loc[final_mask].drop(columns=["_bnum_d", "_rrn_d"], errors="ignore")
     else:
-        search_df = search_df.iloc[0:0]  # 검색어 없으면 결과 미표시
+        result = work.iloc[0:0]
 
+    # KPI & 결과
     c1, c2 = st.columns(2)
     c1.metric("업로드 행 수", len(df))
-    c2.metric("검색 결과 수", len(search_df))
+    c2.metric("검색 결과 수", len(result))
 
-    if q.strip() and search_df.empty:
-        st.warning("검색 결과가 없습니다. 철자 또는 하이픈(-) 유무를 확인해보세요.")
+    if all((q.strip() == "") for q in st.session_state.multi_queries):
+        st.info("검색어를 하나 이상 입력해 줘. 여러 명을 찾으려면 ‘＋ 입력칸 추가’를 눌러 각각 입력하면 돼.")
+    elif result.empty:
+        st.warning("검색 결과가 없어. 철자나 하이픈(-) 유무를 확인해봐!")
 
     cols = ["상호", "사업자번호", "대표자", "주민번호", "사업자상태", "폐업일자"]
-    cols = [c for c in cols if c in search_df.columns]
-    st.dataframe(search_df.reindex(columns=cols), use_container_width=True)
+    cols = [c for c in cols if c in result.columns]
+    st.dataframe(result.reindex(columns=cols), use_container_width=True)
 
-    if not search_df.empty:
+    if not result.empty:
         st.download_button(
             "⬇️ 검색 결과 CSV 다운로드",
-            data=search_df.reindex(columns=cols).to_csv(index=False).encode("utf-8-sig"),
+            data=result.reindex(columns=cols).to_csv(index=False).encode("utf-8-sig"),
             file_name="사업자_조회_결과.csv",
             mime="text/csv"
         )
 
 # ==============================
-# 화면 2) 전체 폐업자 조회
+# 2) 전체 폐업자 조회
 # ==============================
 def render_closed_list(df: pd.DataFrame):
     st.markdown("## 📋 전체 폐업자 조회")
 
     closed = df[df["사업자상태"].astype(str).str.strip() == "폐업"].copy()
 
-    # 기간 필터
     enable_range = st.checkbox("폐업일자 기간으로 필터", value=False)
     if enable_range:
         min_d = pd.to_datetime(closed["폐업일자(파싱)"]).min()
@@ -191,7 +227,7 @@ def render_closed_list(df: pd.DataFrame):
     )
 
 # ==============================
-# 화면 3) 연도별 폐업자 수 통계
+# 3) 연도별 폐업자 수 통계
 # ==============================
 def render_closed_by_year(df: pd.DataFrame):
     st.markdown("## 📈 연도별 폐업자 수 통계")
@@ -227,7 +263,7 @@ def render_closed_by_year(df: pd.DataFrame):
     )
 
 # ==============================
-# 화면 4) 동일 사업자 내역 (대표자/주민번호)
+# 4) 동일 사업자(대표자/주민번호) 내역
 # ==============================
 def render_duplicates(df: pd.DataFrame):
     st.markdown("## 👥 동일 사업자(대표자/주민번호) 내역")
@@ -284,82 +320,60 @@ def render_duplicates(df: pd.DataFrame):
         )
 
 # ==============================
-# 화면 5) 🤖 챗봇 (OpenAI)
+# 5) 🤖 챗봇 (OpenAI)
 # ==============================
 def render_chatbot():
     st.markdown("## 🤖 챗봇")
-    st.caption("OpenAI API 키를 입력하고 아래에서 질문해 보세요. (키는 세션에만 저장되며 로그로 남기지 않아요)")
+    st.caption("OpenAI API 키를 입력하고 아래에서 질문해 봐. (키는 세션에만 저장)")
 
-    # 세션 상태 준비
     if "chat_messages" not in st.session_state:
-        st.session_state.chat_messages = []  # [{"role":"user"/"assistant", "content":"..."}]
+        st.session_state.chat_messages = []
     if "openai_api_key" not in st.session_state:
         st.session_state.openai_api_key = ""
 
-    # API 키 입력
     key = st.text_input("OpenAI API Key", type="password", placeholder="sk-...", value=st.session_state.openai_api_key)
     if key != st.session_state.openai_api_key:
         st.session_state.openai_api_key = key
 
-    # 모델 선택
-    model = st.selectbox(
-        "모델 선택",
-        options=["gpt-4o-mini", "gpt-4o", "gpt-4.1-mini", "gpt-4.1"],
-        index=0
-    )
-
+    model = st.selectbox("모델 선택", ["gpt-4o-mini", "gpt-4o", "gpt-4.1-mini", "gpt-4.1"], index=0)
     st.divider()
 
-    # 기존 대화 출력
     for msg in st.session_state.chat_messages:
         with st.chat_message("user" if msg["role"] == "user" else "assistant"):
             st.markdown(msg["content"])
 
-    # 입력창
-    prompt = st.chat_input("무엇이든 물어보세요. (예: 특정 대표자의 폐업 연도만 추려줘)")
+    prompt = st.chat_input("무엇이든 물어봐! (예: 특정 대표자의 폐업 연도만 추려줘)")
     if prompt:
         if not st.session_state.openai_api_key:
-            st.warning("먼저 OpenAI API 키를 입력해 주세요.")
+            st.warning("먼저 OpenAI API 키를 입력해 줘.")
             return
         if OpenAI is None:
-            st.error("openai 패키지가 설치되어 있지 않습니다. requirements.txt에 openai>=1.0.0을 추가해 주세요.")
+            st.error("openai 패키지가 설치되어 있지 않아. requirements.txt에 openai>=1.0.0 추가해 줘.")
             return
 
-        # 사용자 메시지 기록 & 표시
         st.session_state.chat_messages.append({"role": "user", "content": prompt})
         with st.chat_message("user"):
             st.markdown(prompt)
 
         try:
             client = OpenAI(api_key=st.session_state.openai_api_key)
-
-            # 시스템 프롬프트(선택): 테이블형 데이터 다룰 때 도움되는 안내
             sys_prompt = (
                 "너는 세무/사업자 데이터 어시스턴트야. "
-                "사용자의 질문을 명확히 이해하고, 필요한 경우 표 형식으로 간단히 정리해서 답해줘. "
-                "모호하면 추가 질문 없이 합리적으로 추정해 요약해줘."
+                "질문을 명확히 이해하고, 필요하면 표로 간단히 정리해 답해줘."
             )
-
-            # OpenAI 호출
             resp = client.chat.completions.create(
                 model=model,
-                messages=[
-                    {"role": "system", "content": sys_prompt},
-                    *st.session_state.chat_messages  # user/assistant history 포함
-                ],
+                messages=[{"role": "system", "content": sys_prompt}, *st.session_state.chat_messages],
                 temperature=0.3,
             )
             answer = resp.choices[0].message.content.strip()
-
         except Exception as e:
-            answer = f"오류가 발생했어요: {e}"
+            answer = f"오류가 발생했어: {e}"
 
-        # 답변 기록 & 표시
         st.session_state.chat_messages.append({"role": "assistant", "content": answer})
         with st.chat_message("assistant"):
             st.markdown(answer)
 
-        # 대화 저장 다운로드
         chat_df = pd.DataFrame(st.session_state.chat_messages)
         st.download_button(
             "⬇️ 대화 내보내기 (CSV)",
@@ -369,7 +383,7 @@ def render_chatbot():
         )
 
 # ==============================
-# 라우팅: 선택한 화면만 렌더
+# 라우팅
 # ==============================
 if page == "사업자 조회":
     render_search(df)
@@ -379,5 +393,5 @@ elif page == "연도별 폐업자 수 통계":
     render_closed_by_year(df)
 elif page == "동일 사업자(대표자/주민번호) 내역":
     render_duplicates(df)
-else:  # 🤖 챗봇
+else:
     render_chatbot()
