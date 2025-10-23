@@ -28,7 +28,7 @@ SAMPLE_DATA = {
 }
 
 # ==============================
-# 공통 유틸
+# 유틸
 # ==============================
 @st.cache_data(show_spinner=False)
 def load_df_from_file(file) -> pd.DataFrame:
@@ -70,7 +70,7 @@ else:
 
 df = normalize_cols(df)
 
-# 필수 컬럼
+# 필수 컬럼 확인
 required = {"상호", "사업자번호", "대표자", "주민번호", "사업자상태"}
 missing = [c for c in required if c not in df.columns]
 if missing:
@@ -96,63 +96,43 @@ page = st.sidebar.radio(
 )
 
 # ==============================
-# 1) 사업자 조회 (다중 입력 + 넓은 입력칸 + 중앙정렬 버튼)
+# 1) 사업자 조회 (다중 입력 + 컴팩트 입력칸 + 정갈한 버튼)
 # ==============================
 def render_search(df: pd.DataFrame):
     st.markdown("## 🔎 사업자 조회")
     st.caption("여러 명/여러 조건을 한 번에 검색할 수 있어요. 각 입력칸은 상호·대표자·사업자번호·주민번호에 부분 일치로 매칭됩니다.")
 
-    # 매칭 방식(한 칸 안의 키워드 간)
+    # 매칭 방식 (각 입력칸 내부의 여러 키워드 간)
     match_mode = st.radio("매칭 방식 (각 입력칸에 적용)", ["부분 포함(AND)", "부분 포함(OR)"], horizontal=True)
 
-    # 여러 입력칸(세션 상태)
+    # 여러 입력칸 상태
     if "multi_queries" not in st.session_state:
         st.session_state.multi_queries = [""]
 
-    # --- 버튼 스타일: 중앙 정렬 + 고정 크기 ---
-    st.markdown("""
-        <style>
-        div.stButton > button {
-            width: 48px !important;
-            height: 48px !important;
-            font-size: 28px !important;
-            font-weight: 700 !important;
-            text-align: center !important;
-            line-height: 1 !important;
-            display: flex !important;
-            align-items: center !important;
-            justify-content: center !important;
-            border-radius: 10px !important;
-        }
-        div.stButton { display: flex; align-items: center; justify-content: center; }
-        </style>
-    """, unsafe_allow_html=True)
-
-    # 버튼: [추가] [여백] [삭제]
+    # 버튼(적당한 폭 + 간격)
     st.caption("입력칸 추가 / 삭제")
-    col_add, col_gap, col_del, _ = st.columns([0.1, 0.05, 0.1, 4])
+    col_add, spacer, col_del, _ = st.columns([0.18, 0.06, 0.18, 4])
     with col_add:
-    if st.button("➕", key="add_query", use_container_width=True):
-        st.session_state.multi_queries.append("")
+        if st.button("+행추가", key="add_query", use_container_width=True):
+            st.session_state.multi_queries.append("")
+    with col_del:
+        if st.button("-행삭제", key="del_query", use_container_width=True) and len(st.session_state.multi_queries) > 1:
+            st.session_state.multi_queries.pop()
 
-with col_del:
-    if st.button("➖", key="del_query", use_container_width=True) and len(st.session_state.multi_queries) > 1:
-        st.session_state.multi_queries.pop()
-
-
-    # 넓은 입력칸(text_area)
+    # 컴팩트한 검색 입력칸들 (text_input, 폭 줄이기 위해 좌측 컬럼에만 배치)
     new_vals = []
     for i, val in enumerate(st.session_state.multi_queries):
         st.markdown(f"**검색어 #{i+1}**")
-        new_vals.append(
-            st.text_area(
-                label="",
-                value=val,
-                placeholder="예) 홍길동 111-11-11111 800101-1234567 (공백으로 여러 키워드)",
-                height=56,
-                key=f"query_input_{i}",
+        c_in, _ = st.columns([1, 2])  # 왼쪽만 사용해서 폭을 줄임
+        with c_in:
+            new_vals.append(
+                st.text_input(
+                    label="",
+                    value=val,
+                    placeholder="예) 홍길동 1111111111 8001011234567 (공백으로 여러 키워드)",
+                    key=f"query_input_{i}",
+                )
             )
-        )
     st.session_state.multi_queries = new_vals
 
     # 검색 로직
@@ -163,7 +143,7 @@ with col_del:
     def mask_for_one_query(q: str):
         q = (q or "").strip()
         if not q:
-            return pd.Series([False]*len(work), index=work.index)
+            return pd.Series([False] * len(work), index=work.index)
         terms = [t.strip() for t in q.split() if t.strip()]
 
         def row_match(row) -> bool:
@@ -187,6 +167,7 @@ with col_del:
 
         return work.apply(row_match, axis=1)
 
+    # 여러 입력칸 결과를 합집합(OR)으로 결합
     masks = [mask_for_one_query(q) for q in st.session_state.multi_queries]
     if any(m.any() for m in masks):
         final_mask = pd.Series(False, index=work.index)
@@ -196,13 +177,13 @@ with col_del:
     else:
         result = work.iloc[0:0]
 
-    # 결과
+    # 결과 표시 & 다운로드
     c1, c2 = st.columns(2)
     c1.metric("업로드 행 수", len(df))
     c2.metric("검색 결과 수", len(result))
 
     if all((q.strip() == "") for q in st.session_state.multi_queries):
-        st.info("검색어를 하나 이상 입력해 주세요. 여러 명을 찾으려면 ‘+’ 버튼으로 입력칸을 추가하세요.")
+        st.info("검색어를 하나 이상 입력해 주세요. 여러 명을 찾으려면 ‘+행추가’ 버튼으로 입력칸을 추가하세요.")
     elif result.empty:
         st.warning("검색 결과가 없습니다. 철자 또는 하이픈(-) 유무를 확인해보세요.")
 
@@ -223,7 +204,6 @@ with col_del:
 # ==============================
 def render_closed_list(df: pd.DataFrame):
     st.markdown("## 📋 전체 폐업자 조회")
-
     closed = df[df["사업자상태"].astype(str).str.strip() == "폐업"].copy()
 
     enable_range = st.checkbox("폐업일자 기간으로 필터", value=False)
