@@ -131,14 +131,42 @@ def render_search(df: pd.DataFrame):
     """, unsafe_allow_html=True)
 
     # 버튼
-    st.caption("입력칸 추가 / 삭제")
-    col_add, spacer, col_del, _ = st.columns([0.2, 0.05, 0.2, 4])
-    with col_add:
-        if st.button("+행추가", key="add_query", use_container_width=True):
-            st.session_state.multi_queries.append("")
-    with col_del:
-        if st.button("-행삭제", key="del_query", use_container_width=True) and len(st.session_state.multi_queries) > 1:
-            st.session_state.multi_queries.pop()
+    # ---- 입력칸 추가 / 삭제 (가로 직렬, 줄바꿈 금지, 여백 확보) ----
+st.caption("입력칸 추가 / 삭제")
+
+# 스타일: 버튼 폭 고정 + 줄바꿈 방지 + 가운데 정렬 + 버튼 간 여백
+st.markdown("""
+    <style>
+    .btn-row {                   /* 버튼들을 담는 행 */
+        display: flex;
+        justify-content: center; /* 중앙 정렬 */
+        align-items: center;
+        gap: 24px;               /* 버튼 사이 간격 */
+        margin-bottom: 8px;
+    }
+    .btn-row .stButton>button {  /* 버튼 자체 스타일 */
+        min-width: 120px;        /* ✅ 가로폭 확보 → 글자 줄바꿈 방지 */
+        height: 40px;
+        white-space: nowrap;     /* ✅ 줄바꿈 금지 */
+        font-size: 16px;
+        font-weight: 600;
+        border-radius: 8px;
+    }
+    </style>
+""", unsafe_allow_html=True)
+
+# 버튼 2개를 한 행에 직렬 배치
+st.markdown('<div class="btn-row">', unsafe_allow_html=True)
+
+col_add, col_del = st.columns(2)
+with col_add:
+    if st.button("+행추가", key="add_query"):
+        st.session_state.multi_queries.append("")
+with col_del:
+    if st.button("-행삭제", key="del_query") and len(st.session_state.multi_queries) > 1:
+        st.session_state.multi_queries.pop()
+
+st.markdown('</div>', unsafe_allow_html=True)
 
     # 입력칸 (가로 폭 줄임)
     new_vals = []
