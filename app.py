@@ -86,55 +86,11 @@ else:
     df["폐업일자(파싱)"] = pd.NaT
 
 # ==============================
-# 사이드바 📁 메뉴 (스타일 강화 + "보기 선택" 제거)
+# 사이드바 📁 메뉴
 # ==============================
-st.markdown("""
-    <style>
-    /* 사이드바 배경 & 패딩 */
-    [data-testid="stSidebar"] {
-        background-color: #f8f9fb !important;
-        padding-top: 1.2rem !important;
-        padding-right: 0.8rem !important;
-    }
-
-    /* 메뉴 타이틀 */
-    .menu-title {
-        font-size: 20px; font-weight: 800; color: #2e3a59;
-        display: flex; align-items: center; gap: 8px; margin: 4px 0 14px 2px;
-    }
-    .menu-title span { font-size: 24px; }
-
-    /* 라디오 항목 카드화 (label 버전 & div[role=radio] 버전 모두 대응) */
-    div[role="radiogroup"] > label,
-    div[role="radiogroup"] > div[role="radio"]{
-        border: 1px solid #d5d9e2; border-radius: 10px;
-        padding: 8px 12px; margin-bottom: 8px;
-        background-color: #ffffff;
-        display: flex; align-items: center; gap: 8px;
-        transition: all .18s ease-in-out;
-    }
-
-    /* hover */
-    div[role="radiogroup"] > label:hover,
-    div[role="radiogroup"] > div[role="radio"]:hover{
-        background-color: #eef3ff; border-color: #a8bfff; transform: translateX(2px);
-        cursor: pointer;
-    }
-
-    /* 선택 강조 (두 구조 모두 지원) */
-    div[role="radiogroup"] > div[role="radio"][aria-checked="true"],
-    div[role="radiogroup"] > label:has(input:checked){
-        background-color: #dfe8ff !important;
-        border-color: #5a78ff !important;
-        font-weight: 700 !important;
-    }
-    </style>
-""", unsafe_allow_html=True)
-
-st.sidebar.markdown("<div class='menu-title'><span>📁</span> 메뉴</div>", unsafe_allow_html=True)
-
+st.sidebar.header("📁 메뉴")
 page = st.sidebar.radio(
-    "",  # ← "보기 선택" 라벨 제거
+    "보기 선택",
     ["사업자 조회", "전체 폐업자 조회", "연도별 폐업자 수 통계", "동일 사업자(대표자/주민번호) 내역", "🤖 챗봇"],
     index=0
 )
@@ -146,23 +102,29 @@ def render_search(df: pd.DataFrame):
     st.markdown("## 🔎 사업자 조회")
     st.caption("여러 명/여러 조건을 한 번에 검색할 수 있어요. 각 입력칸은 상호·대표자·사업자번호·주민번호에 부분 일치로 매칭됩니다.")
 
-    # 매칭 방식
+    # 매칭 방식 (각 입력칸 내부의 여러 키워드 간)
     match_mode = st.radio("매칭 방식 (각 입력칸에 적용)", ["부분 포함(AND)", "부분 포함(OR)"], horizontal=True)
 
     # 여러 입력칸 상태
     if "multi_queries" not in st.session_state:
         st.session_state.multi_queries = [""]
 
-    # 버튼 스타일(가로 넓힘 + 줄바꿈 방지)
+    # ---- 버튼 스타일: 가로 넓힘 + 줄바꿈 방지 ----
     st.markdown("""
         <style>
         div.stButton > button {
-            width: 120px !important; height: 40px !important;
-            font-size: 16px !important; font-weight: 600 !important;
-            white-space: nowrap !important; color: #222 !important;
-            background-color: #FFFFFF !important; border: 1px solid #CCCCCC !important;
-            border-radius: 8px !important; display: inline-flex !important;
-            align-items: center !important; justify-content: center !important;
+            width: 120px !important;
+            height: 40px !important;
+            font-size: 16px !important;
+            font-weight: 600 !important;
+            white-space: nowrap !important;
+            color: #222 !important;
+            background-color: #FFFFFF !important;
+            border: 1px solid #CCCCCC !important;
+            border-radius: 8px !important;
+            display: inline-flex !important;
+            align-items: center !important;
+            justify-content: center !important;
         }
         </style>
     """, unsafe_allow_html=True)
@@ -177,9 +139,10 @@ def render_search(df: pd.DataFrame):
         if st.button("-행삭제", key="del_query", use_container_width=False) and len(st.session_state.multi_queries) > 1:
             st.session_state.multi_queries.pop()
 
-    # 검색 입력칸 (라벨과 거의 맞닿게 + 폭 살짝 축소)
+    # ---- 검색 입력칸 (라벨과 거의 맞닿도록 & 폭 살짝 축소) ----
     new_vals = []
     for i, val in enumerate(st.session_state.multi_queries):
+        # 라벨과 입력창 간격을 거의 0으로 (Streamlit 기본 마진을 상쇄)
         st.markdown(
             f"<div style='font-weight:600; font-size:15px; margin-bottom:-6px;'>검색어 #{i+1}</div>",
             unsafe_allow_html=True
@@ -188,15 +151,17 @@ def render_search(df: pd.DataFrame):
         with c_in:
             new_vals.append(
                 st.text_input(
-                    label="", value=val,
+                    label="",
+                    value=val,
                     placeholder="예) 홍길동 1111111111 8001011234567 (공백으로 여러 키워드)",
                     key=f"query_input_{i}",
                 )
             )
+        # 아래 여백 살짝 감소
         st.markdown("<div style='margin-top:-6px;'></div>", unsafe_allow_html=True)
     st.session_state.multi_queries = new_vals
 
-    # 검색 로직
+    # -------- 검색 로직 --------
     work = df.copy()
     work["_bnum_d"] = work["사업자번호"].apply(digits_only)
     work["_rrn_d"] = work["주민번호"].apply(digits_only)
@@ -226,10 +191,12 @@ def render_search(df: pd.DataFrame):
 
         return work.apply(row_match, axis=1)
 
+    # 여러 입력칸 결과 OR(합집합) 결합
     masks = [mask_for_one_query(q) for q in st.session_state.multi_queries]
     if any(m.any() for m in masks):
         final_mask = pd.Series(False, index=work.index)
-        for m in masks: final_mask |= m
+        for m in masks:
+            final_mask |= m
         result = work.loc[final_mask].drop(columns=["_bnum_d", "_rrn_d"], errors="ignore")
     else:
         result = work.iloc[0:0]
@@ -305,8 +272,12 @@ def render_closed_by_year(df: pd.DataFrame):
         st.info("폐업 연도 정보가 없습니다.")
 
     agg = (
-        closed["폐업연도"].dropna().value_counts().sort_index()
-        .rename_axis("연도").reset_index(name="폐업자 수")
+        closed["폐업연도"]
+        .dropna()
+        .value_counts()
+        .sort_index()
+        .rename_axis("연도")
+        .reset_index(name="폐업자 수")
     )
 
     st.dataframe(agg, use_container_width=True)
