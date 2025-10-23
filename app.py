@@ -81,20 +81,20 @@ else:
     df["폐업일자(파싱)"] = pd.NaT
 
 # ==============================
-# 페이지 선택 (오직 선택한 화면만 렌더)
+# 페이지 선택 (선택한 화면만 렌더)
 # ==============================
 st.sidebar.header("카테고리")
 page = st.sidebar.radio(
     "보기 선택",
-    ["AI 검색", "전체 폐업자 조회", "연도별 폐업자 수 통계", "동일 사업자(대표자/주민번호) 내역"],
+    ["사업자 조회", "전체 폐업자 조회", "연도별 폐업자 수 통계", "동일 사업자(대표자/주민번호) 내역"],
     index=0
 )
 
 # ==============================
-# 화면 1) AI 검색
+# 화면 1) 사업자 조회 (기존 AI 검색)
 # ==============================
-def render_ai_search(df: pd.DataFrame):
-    st.markdown("## 🔎 AI 검색")
+def render_search(df: pd.DataFrame):
+    st.markdown("## 🔎 사업자 조회")
     st.caption("검색할 사업자를 입력해주세요 · 상호/대표자/사업자번호/주민번호로 부분 검색합니다.")
 
     q = st.text_input("검색할 사업자를 입력해주세요", placeholder="예) 홍길동 111-11-11111 800101-1234567")
@@ -145,7 +145,7 @@ def render_ai_search(df: pd.DataFrame):
         st.download_button(
             "⬇️ 검색 결과 CSV 다운로드",
             data=search_df.reindex(columns=cols).to_csv(index=False).encode("utf-8-sig"),
-            file_name="AI검색_결과.csv",
+            file_name="사업자_조회_결과.csv",
             mime="text/csv"
         )
 
@@ -244,4 +244,47 @@ def render_duplicates(df: pd.DataFrame):
     st.download_button(
         "⬇️ 대표자 중복 요약 CSV",
         data=dup_by_owner.to_csv(index=False).encode("utf-8-sig"),
-        file_name="대표자_
+        file_name="대표자_중복_요약.csv",
+        mime="text/csv"
+    )
+    st.download_button(
+        "⬇️ 주민번호 중복 요약 CSV",
+        data=dup_by_rrn.to_csv(index=False).encode("utf-8-sig"),
+        file_name="주민번호_중복_요약.csv",
+        mime="text/csv"
+    )
+
+    st.subheader("상세 조회")
+    mode_key = st.radio("조회 기준", ["대표자", "주민번호"], horizontal=True)
+    if mode_key == "대표자":
+        options = dup_by_owner["대표자"].tolist()
+        sel = st.selectbox("대표자 선택", options=options if options else ["(중복 없음)"])
+        detail = df[df["대표자"] == sel].copy() if options else df.iloc[0:0]
+    else:
+        options = dup_by_rrn["주민번호"].tolist()
+        sel = st.selectbox("주민번호 선택", options=options if options else ["(중복 없음)"])
+        detail = df[df["주민번호"] == sel].copy() if options else df.iloc[0:0]
+
+    cols = ["상호", "사업자번호", "대표자", "주민번호", "사업자상태", "폐업일자"]
+    cols = [c for c in cols if c in detail.columns]
+    st.dataframe(detail.reindex(columns=cols), use_container_width=True)
+
+    if not detail.empty:
+        st.download_button(
+            "⬇️ 상세 내역 CSV 다운로드",
+            data=detail.reindex(columns=cols).to_csv(index=False).encode("utf-8-sig"),
+            file_name=f"동일사업자_상세_{mode_key}.csv",
+            mime="text/csv"
+        )
+
+# ==============================
+# 라우팅: 선택한 화면만 렌더
+# ==============================
+if page == "사업자 조회":
+    render_search(df)
+elif page == "전체 폐업자 조회":
+    render_closed_list(df)
+elif page == "연도별 폐업자 수 통계":
+    render_closed_by_year(df)
+else:
+    render_duplicates(df)
