@@ -96,7 +96,7 @@ page = st.sidebar.radio(
 )
 
 # ==============================
-# 1) 사업자 조회 (다중 입력 + 넓은 입력칸 + 간격 띄운 버튼)
+# 1) 사업자 조회 (다중 입력 + 넓은 입력칸 + 중앙정렬 버튼)
 # ==============================
 def render_search(df: pd.DataFrame):
     st.markdown("## 🔎 사업자 조회")
@@ -109,59 +109,48 @@ def render_search(df: pd.DataFrame):
     if "multi_queries" not in st.session_state:
         st.session_state.multi_queries = [""]
 
-    # 버튼(여백 있는 3컬럼: 추가 / 빈칸 / 삭제)
-    # ---- "사업자 조회" 내부: 입력칸 추가/삭제 버튼 (중앙 정렬 깔끔 버전) ----
-st.caption("입력칸 추가 / 삭제")
+    # --- 버튼 스타일: 중앙 정렬 + 고정 크기 ---
+    st.markdown("""
+        <style>
+        div.stButton > button {
+            width: 48px !important;
+            height: 48px !important;
+            font-size: 28px !important;
+            font-weight: 700 !important;
+            text-align: center !important;
+            line-height: 1 !important;
+            display: flex !important;
+            align-items: center !important;
+            justify-content: center !important;
+            border-radius: 10px !important;
+        }
+        div.stButton { display: flex; align-items: center; justify-content: center; }
+        </style>
+    """, unsafe_allow_html=True)
 
-# CSS 스타일 (가운데 정렬)
-st.markdown("""
-    <style>
-    div.stButton > button {
-        width: 48px !important;
-        height: 48px !important;
-        font-size: 28px !important;
-        font-weight: 700 !important;
-        text-align: center !important;
-        line-height: 1 !important;
-        display: flex !important;
-        align-items: center !important;
-        justify-content: center !important;
-        border-radius: 10px !important;
-    }
-    div.stButton {
-        display: flex;
-        align-items: center;
-        justify-content: center;
-    }
-    </style>
-""", unsafe_allow_html=True)
+    # 버튼: [추가] [여백] [삭제]
+    st.caption("입력칸 추가 / 삭제")
+    col_add, col_gap, col_del, _ = st.columns([0.1, 0.05, 0.1, 4])
+    with col_add:
+        if st.button("+", key="add_query", use_container_width=True):
+            st.session_state.multi_queries.append("")
+    with col_del:
+        if st.button("-", key="del_query", use_container_width=True) and len(st.session_state.multi_queries) > 1:
+            st.session_state.multi_queries.pop()
 
-# 버튼 배치 — 간격 띄운 두 컬럼
-col_add, col_gap, col_del, _ = st.columns([0.1, 0.05, 0.1, 4])
-
-with col_add:
-    if st.button("+", key="add_query", use_container_width=True):
-        st.session_state.multi_queries.append("")
-
-with col_del:
-    if st.button("-", key="del_query", use_container_width=True) and len(st.session_state.multi_queries) > 1:
-        st.session_state.multi_queries.pop()
-
-
-    # 넓은 입력칸
+    # 넓은 입력칸(text_area)
     new_vals = []
     for i, val in enumerate(st.session_state.multi_queries):
-        with st.container():
-            st.markdown(f"**검색어 #{i+1}**")
-            new_vals.append(
-                st.text_area(
-                    label="",
-                    value=val,
-                    placeholder="예) 홍길동 111-11-11111 800101-1234567 (공백으로 여러 키워드)",
-                    height=56,
-                    key=f"query_input_{i}",
-                )
+        st.markdown(f"**검색어 #{i+1}**")
+        new_vals.append(
+            st.text_area(
+                label="",
+                value=val,
+                placeholder="예) 홍길동 111-11-11111 800101-1234567 (공백으로 여러 키워드)",
+                height=56,
+                key=f"query_input_{i}",
             )
+        )
     st.session_state.multi_queries = new_vals
 
     # 검색 로직
@@ -211,7 +200,7 @@ with col_del:
     c2.metric("검색 결과 수", len(result))
 
     if all((q.strip() == "") for q in st.session_state.multi_queries):
-        st.info("검색어를 하나 이상 입력해 주세요. 여러 명을 찾으려면 ‘🟥＋’ 버튼으로 입력칸을 추가하세요.")
+        st.info("검색어를 하나 이상 입력해 주세요. 여러 명을 찾으려면 ‘+’ 버튼으로 입력칸을 추가하세요.")
     elif result.empty:
         st.warning("검색 결과가 없습니다. 철자 또는 하이픈(-) 유무를 확인해보세요.")
 
