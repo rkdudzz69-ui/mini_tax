@@ -96,7 +96,7 @@ page = st.sidebar.radio(
 )
 
 # ==============================
-# 1) 사업자 조회 (다중 입력 + 넓은 입력칸 + 색상 버튼)
+# 1) 사업자 조회 (다중 입력 + 넓은 입력칸 + 간격 띄운 버튼)
 # ==============================
 def render_search(df: pd.DataFrame):
     st.markdown("## 🔎 사업자 조회")
@@ -109,37 +109,14 @@ def render_search(df: pd.DataFrame):
     if "multi_queries" not in st.session_state:
         st.session_state.multi_queries = [""]
 
-    # 버튼 스타일 (＋=빨강, －=파랑)
-    st.markdown("""
-        <style>
-        /* 버튼 공통 스타일 */
-        div.stButton > button {
-            width: 48px;
-            height: 42px;
-            font-size: 22px;
-            border-radius: 10px;
-            font-weight: 700;
-        }
-        /* 첫 번째 버튼(추가) 빨강 */
-        div[data-testid="column"] div.stButton:nth-of-type(1) > button {
-            background-color: #FF5C5C !important;
-            color: #FFFFFF !important;
-        }
-        /* 두 번째 버튼(삭제) 파랑 */
-        div[data-testid="column"] div.stButton:nth-of-type(2) > button {
-            background-color: #5C9DFF !important;
-            color: #FFFFFF !important;
-        }
-        </style>
-    """, unsafe_allow_html=True)
-
+    # 버튼(여백 있는 3컬럼: 추가 / 빈칸 / 삭제)
     st.caption("입력칸 추가 / 삭제")
-    col_add, col_del, _ = st.columns([0.2, 0.2, 4])
+    col_add, col_gap, col_del, _ = st.columns([0.14, 0.06, 0.14, 4])
     with col_add:
-        if st.button("＋"):
+        if st.button("🟥＋", key="add_query", use_container_width=True):
             st.session_state.multi_queries.append("")
     with col_del:
-        if st.button("－") and len(st.session_state.multi_queries) > 1:
+        if st.button("🟦－", key="del_query", use_container_width=True) and len(st.session_state.multi_queries) > 1:
             st.session_state.multi_queries.pop()
 
     # 넓은 입력칸
@@ -205,7 +182,7 @@ def render_search(df: pd.DataFrame):
     c2.metric("검색 결과 수", len(result))
 
     if all((q.strip() == "") for q in st.session_state.multi_queries):
-        st.info("검색어를 하나 이상 입력해 주세요. 여러 명을 찾으려면 ‘＋’ 버튼으로 입력칸을 추가하세요.")
+        st.info("검색어를 하나 이상 입력해 주세요. 여러 명을 찾으려면 ‘🟥＋’ 버튼으로 입력칸을 추가하세요.")
     elif result.empty:
         st.warning("검색 결과가 없습니다. 철자 또는 하이픈(-) 유무를 확인해보세요.")
 
