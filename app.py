@@ -139,10 +139,14 @@ def render_search(df: pd.DataFrame):
         if st.button("-행삭제", key="del_query", use_container_width=False) and len(st.session_state.multi_queries) > 1:
             st.session_state.multi_queries.pop()
 
-    # ---- 검색 입력칸 (폭 살짝 축소 & 간격 컴팩트) ----
+    # ---- 검색 입력칸 (라벨과 거의 맞닿도록 & 폭 살짝 축소) ----
     new_vals = []
     for i, val in enumerate(st.session_state.multi_queries):
-        st.markdown(f"**검색어 #{i+1}**")
+        # 라벨과 입력창 간격을 거의 0으로 (Streamlit 기본 마진을 상쇄)
+        st.markdown(
+            f"<div style='font-weight:600; font-size:15px; margin-bottom:-6px;'>검색어 #{i+1}</div>",
+            unsafe_allow_html=True
+        )
         c_in, _ = st.columns([0.7, 0.3])  # 입력칸 폭 축소
         with c_in:
             new_vals.append(
