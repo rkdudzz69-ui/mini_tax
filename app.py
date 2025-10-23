@@ -110,14 +110,43 @@ def render_search(df: pd.DataFrame):
         st.session_state.multi_queries = [""]
 
     # 버튼(여백 있는 3컬럼: 추가 / 빈칸 / 삭제)
-    st.caption("입력칸 추가 / 삭제")
-    col_add, col_gap, col_del, _ = st.columns([0.14, 0.06, 0.14, 4])
-    with col_add:
-        if st.button("＋", key="add_query", use_container_width=True):
-            st.session_state.multi_queries.append("")
-    with col_del:
-        if st.button("－", key="del_query", use_container_width=True) and len(st.session_state.multi_queries) > 1:
-            st.session_state.multi_queries.pop()
+    # ---- "사업자 조회" 내부: 입력칸 추가/삭제 버튼 (중앙 정렬 깔끔 버전) ----
+st.caption("입력칸 추가 / 삭제")
+
+# CSS 스타일 (가운데 정렬)
+st.markdown("""
+    <style>
+    div.stButton > button {
+        width: 48px !important;
+        height: 48px !important;
+        font-size: 28px !important;
+        font-weight: 700 !important;
+        text-align: center !important;
+        line-height: 1 !important;
+        display: flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+        border-radius: 10px !important;
+    }
+    div.stButton {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+    </style>
+""", unsafe_allow_html=True)
+
+# 버튼 배치 — 간격 띄운 두 컬럼
+col_add, col_gap, col_del, _ = st.columns([0.1, 0.05, 0.1, 4])
+
+with col_add:
+    if st.button("+", key="add_query", use_container_width=True):
+        st.session_state.multi_queries.append("")
+
+with col_del:
+    if st.button("-", key="del_query", use_container_width=True) and len(st.session_state.multi_queries) > 1:
+        st.session_state.multi_queries.pop()
+
 
     # 넓은 입력칸
     new_vals = []
