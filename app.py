@@ -3,7 +3,7 @@ import re
 import pandas as pd
 import streamlit as st
 
-# (옵션) OpenAI SDK
+# (선택) OpenAI SDK
 try:
     from openai import OpenAI
 except Exception:
@@ -96,7 +96,7 @@ page = st.sidebar.radio(
 )
 
 # ==============================
-# 1) 사업자 조회 (다중 입력 지원)
+# 1) 사업자 조회 (다중 입력 + 넓은 입력칸)
 # ==============================
 def render_search(df: pd.DataFrame):
     st.markdown("## 🔎 사업자 조회")
@@ -107,27 +107,33 @@ def render_search(df: pd.DataFrame):
 
     # 여러 입력칸(세션 상태)
     if "multi_queries" not in st.session_state:
-        st.session_state.multi_queries = [""]  # 기본 1칸
+        st.session_state.multi_queries = [""]  # 시작 1칸
 
-    c_add, c_del, _ = st.columns([1,1,6])
+    c_add, c_del, _ = st.columns([1, 1, 6])
     with c_add:
-        if st.button("＋ 입력칸 추가"):
+        if st.button("＋ 입력칸 추가", use_container_width=True):
             st.session_state.multi_queries.append("")
     with c_del:
-        if st.button("－ 마지막 제거") and len(st.session_state.multi_queries) > 1:
+        if st.button("－ 마지막 제거", use_container_width=True) and len(st.session_state.multi_queries) > 1:
             st.session_state.multi_queries.pop()
 
-    # 입력칸 렌더링
+    # 넓은 입력칸(text_area)
     new_vals = []
     for i, val in enumerate(st.session_state.multi_queries):
-        new_vals.append(st.text_input(
-            f"검색어 #{i+1}",
-            value=val,
-            placeholder="예) 홍길동 111-11-11111 800101-1234567 (공백으로 여러 키워드)"
-        ))
+        with st.container():
+            st.markdown(f"**검색어 #{i+1}**")
+            new_vals.append(
+                st.text_area(
+                    label="",
+                    value=val,
+                    placeholder="예) 홍길동 111-11-11111 800101-1234567 (공백으로 여러 키워드)",
+                    height=50,
+                    key=f"query_input_{i}",
+                )
+            )
     st.session_state.multi_queries = new_vals
 
-    # 작업용 컬럼 준비(숫자 전용)
+    # 작업용 숫자-only 컬럼
     work = df.copy()
     work["_bnum_d"] = work["사업자번호"].apply(digits_only)
     work["_rrn_d"] = work["주민번호"].apply(digits_only)
