@@ -96,28 +96,56 @@ page = st.sidebar.radio(
 )
 
 # ==============================
-# 1) 사업자 조회 (다중 입력 + 넓은 입력칸)
+# 1) 사업자 조회 (다중 입력 + 넓은 입력칸 + 버튼 색상)
 # ==============================
 def render_search(df: pd.DataFrame):
     st.markdown("## 🔎 사업자 조회")
-    st.caption("여러 명/여러 조건을 한 번에 검색할 수 있어. 각 입력칸은 상호·대표자·사업자번호·주민번호에 부분 일치로 매칭돼.")
+    st.caption("여러 명/여러 조건을 한 번에 검색할 수 있어요. 각 입력칸은 상호·대표자·사업자번호·주민번호에 부분 일치로 매칭됩니다.")
 
     # 매칭 방식(한 칸 안의 키워드 간)
     match_mode = st.radio("매칭 방식 (각 입력칸에 적용)", ["부분 포함(AND)", "부분 포함(OR)"], horizontal=True)
 
     # 여러 입력칸(세션 상태)
     if "multi_queries" not in st.session_state:
-        st.session_state.multi_queries = [""]  # 시작 1칸
+        st.session_state.multi_queries = [""]
 
-    c_add, c_del, _ = st.columns([1, 1, 6])
-    with c_add:
-        if st.button("＋ 입력칸 추가", use_container_width=True):
+    # 버튼 스타일 지정 (CSS)
+    st.markdown("""
+        <style>
+        div[data-testid="column"]:has(button) {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        div.stButton > button {
+            width: 45px;
+            height: 45px;
+            font-size: 24px;
+            border-radius: 10px;
+            font-weight: bold;
+        }
+        div.stButton > button:first-child {
+            background-color: #FF5C5C !important; /* 빨강 */
+            color: white !important;
+        }
+        div.stButton + div.stButton > button {
+            background-color: #5C9DFF !important; /* 파랑 */
+            color: white !important;
+        }
+        </style>
+    """, unsafe_allow_html=True)
+
+    # 버튼 UI
+    st.caption("입력칸 추가 / 삭제")
+    col_add, col_del, _ = st.columns([0.2, 0.2, 4])
+    with col_add:
+        if st.button("＋"):
             st.session_state.multi_queries.append("")
-    with c_del:
-        if st.button("－ 마지막 제거", use_container_width=True) and len(st.session_state.multi_queries) > 1:
+    with col_del:
+        if st.button("－") and len(st.session_state.multi_queries) > 1:
             st.session_state.multi_queries.pop()
 
-    # 넓은 입력칸(text_area)
+    # 넓은 입력칸
     new_vals = []
     for i, val in enumerate(st.session_state.multi_queries):
         with st.container():
@@ -133,12 +161,11 @@ def render_search(df: pd.DataFrame):
             )
     st.session_state.multi_queries = new_vals
 
-    # 작업용 숫자-only 컬럼
+    # -------- 검색 로직 --------
     work = df.copy()
     work["_bnum_d"] = work["사업자번호"].apply(digits_only)
     work["_rrn_d"] = work["주민번호"].apply(digits_only)
 
-    # 단일 입력칸에 대한 마스크
     def mask_for_one_query(q: str):
         q = (q or "").strip()
         if not q:
@@ -176,15 +203,15 @@ def render_search(df: pd.DataFrame):
     else:
         result = work.iloc[0:0]
 
-    # KPI & 결과
+    # -------- 결과 표시 --------
     c1, c2 = st.columns(2)
     c1.metric("업로드 행 수", len(df))
     c2.metric("검색 결과 수", len(result))
 
     if all((q.strip() == "") for q in st.session_state.multi_queries):
-        st.info("검색어를 하나 이상 입력해 줘. 여러 명을 찾으려면 ‘＋ 입력칸 추가’를 눌러 각각 입력하면 돼.")
+        st.info("검색어를 하나 이상 입력해 주세요. 여러 명을 찾으려면 ‘＋’ 버튼으로 입력칸을 추가하세요.")
     elif result.empty:
-        st.warning("검색 결과가 없어. 철자나 하이픈(-) 유무를 확인해봐!")
+        st.warning("검색 결과가 없습니다. 철자 또는 하이픈(-) 유무를 확인해보세요.")
 
     cols = ["상호", "사업자번호", "대표자", "주민번호", "사업자상태", "폐업일자"]
     cols = [c for c in cols if c in result.columns]
@@ -269,7 +296,7 @@ def render_closed_by_year(df: pd.DataFrame):
     )
 
 # ==============================
-# 4) 동일 사업자(대표자/주민번호) 내역
+# 4) 동일 사업자 내역
 # ==============================
 def render_duplicates(df: pd.DataFrame):
     st.markdown("## 👥 동일 사업자(대표자/주민번호) 내역")
@@ -301,29 +328,6 @@ def render_duplicates(df: pd.DataFrame):
         file_name="주민번호_중복_요약.csv",
         mime="text/csv"
     )
-
-    st.subheader("상세 조회")
-    mode_key = st.radio("조회 기준", ["대표자", "주민번호"], horizontal=True)
-    if mode_key == "대표자":
-        options = dup_by_owner["대표자"].tolist()
-        sel = st.selectbox("대표자 선택", options=options if options else ["(중복 없음)"])
-        detail = df[df["대표자"] == sel].copy() if options else df.iloc[0:0]
-    else:
-        options = dup_by_rrn["주민번호"].tolist()
-        sel = st.selectbox("주민번호 선택", options=options if options else ["(중복 없음)"])
-        detail = df[df["주민번호"] == sel].copy() if options else df.iloc[0:0]
-
-    cols = ["상호", "사업자번호", "대표자", "주민번호", "사업자상태", "폐업일자"]
-    cols = [c for c in cols if c in detail.columns]
-    st.dataframe(detail.reindex(columns=cols), use_container_width=True)
-
-    if not detail.empty:
-        st.download_button(
-            "⬇️ 상세 내역 CSV 다운로드",
-            data=detail.reindex(columns=cols).to_csv(index=False).encode("utf-8-sig"),
-            file_name=f"동일사업자_상세_{mode_key}.csv",
-            mime="text/csv"
-        )
 
 # ==============================
 # 5) 🤖 챗봇 (OpenAI)
@@ -374,30 +378,4 @@ def render_chatbot():
             )
             answer = resp.choices[0].message.content.strip()
         except Exception as e:
-            answer = f"오류가 발생했어: {e}"
-
-        st.session_state.chat_messages.append({"role": "assistant", "content": answer})
-        with st.chat_message("assistant"):
-            st.markdown(answer)
-
-        chat_df = pd.DataFrame(st.session_state.chat_messages)
-        st.download_button(
-            "⬇️ 대화 내보내기 (CSV)",
-            data=chat_df.to_csv(index=False).encode("utf-8-sig"),
-            file_name="chat_history.csv",
-            mime="text/csv"
-        )
-
-# ==============================
-# 라우팅
-# ==============================
-if page == "사업자 조회":
-    render_search(df)
-elif page == "전체 폐업자 조회":
-    render_closed_list(df)
-elif page == "연도별 폐업자 수 통계":
-    render_closed_by_year(df)
-elif page == "동일 사업자(대표자/주민번호) 내역":
-    render_duplicates(df)
-else:
-    render_chatbot()
+            answer = f"오류가 발생했어:
