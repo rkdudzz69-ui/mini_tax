@@ -86,9 +86,9 @@ else:
     df["폐업일자(파싱)"] = pd.NaT
 
 # ==============================
-# 사이드바 카테고리
+# 사이드바 📁 메뉴
 # ==============================
-st.sidebar.header("카테고리")
+st.sidebar.header("📁 메뉴")
 page = st.sidebar.radio(
     "보기 선택",
     ["사업자 조회", "전체 폐업자 조회", "연도별 폐업자 수 통계", "동일 사업자(대표자/주민번호) 내역", "🤖 챗봇"],
@@ -96,7 +96,7 @@ page = st.sidebar.radio(
 )
 
 # ==============================
-# 1) 사업자 조회 (다중 입력 + 컴팩트 입력칸 + 가로 버튼)
+# 1) 사업자 조회
 # ==============================
 def render_search(df: pd.DataFrame):
     st.markdown("## 🔎 사업자 조회")
@@ -109,7 +109,7 @@ def render_search(df: pd.DataFrame):
     if "multi_queries" not in st.session_state:
         st.session_state.multi_queries = [""]
 
-    # ---- 버튼 스타일(전역 적용): 가로폭 넓힘 + 줄바꿈 방지 + 중앙정렬 ----
+    # ---- 버튼 스타일: 가로 넓힘 + 줄바꿈 방지 ----
     st.markdown("""
         <style>
         div.stButton > button {
@@ -117,7 +117,7 @@ def render_search(df: pd.DataFrame):
             height: 40px !important;
             font-size: 16px !important;
             font-weight: 600 !important;
-            white-space: nowrap !important;   /* 줄바꿈 방지 */
+            white-space: nowrap !important;
             color: #222 !important;
             background-color: #FFFFFF !important;
             border: 1px solid #CCCCCC !important;
@@ -129,7 +129,7 @@ def render_search(df: pd.DataFrame):
         </style>
     """, unsafe_allow_html=True)
 
-    # 버튼(가로로 나란히 + 간격용 스페이서 컬럼)
+    # 버튼 (가로로 분리)
     st.caption("입력칸 추가 / 삭제")
     col_add, spacer, col_del, _ = st.columns([0.20, 0.06, 0.20, 1])
     with col_add:
@@ -139,11 +139,11 @@ def render_search(df: pd.DataFrame):
         if st.button("-행삭제", key="del_query", use_container_width=False) and len(st.session_state.multi_queries) > 1:
             st.session_state.multi_queries.pop()
 
-    # 컴팩트한 검색 입력칸들 (text_input, 폭 줄이기 위해 좌측 컬럼만 사용)
+    # ---- 검색 입력칸 (폭 살짝 축소 & 간격 컴팩트) ----
     new_vals = []
     for i, val in enumerate(st.session_state.multi_queries):
         st.markdown(f"**검색어 #{i+1}**")
-        c_in, _ = st.columns([1, 2])  # 왼쪽만 사용 → 폭이 자연스럽게 좁아짐
+        c_in, _ = st.columns([0.7, 0.3])  # 입력칸 폭 축소
         with c_in:
             new_vals.append(
                 st.text_input(
@@ -153,6 +153,8 @@ def render_search(df: pd.DataFrame):
                     key=f"query_input_{i}",
                 )
             )
+        # 아래 여백 살짝 감소
+        st.markdown("<div style='margin-top:-6px;'></div>", unsafe_allow_html=True)
     st.session_state.multi_queries = new_vals
 
     # -------- 검색 로직 --------
@@ -222,7 +224,6 @@ def render_search(df: pd.DataFrame):
 # ==============================
 def render_closed_list(df: pd.DataFrame):
     st.markdown("## 📋 전체 폐업자 조회")
-
     closed = df[df["사업자상태"].astype(str).str.strip() == "폐업"].copy()
 
     enable_range = st.checkbox("폐업일자 기간으로 필터", value=False)
@@ -256,7 +257,6 @@ def render_closed_list(df: pd.DataFrame):
 # ==============================
 def render_closed_by_year(df: pd.DataFrame):
     st.markdown("## 📈 연도별 폐업자 수 통계")
-
     closed = df[df["사업자상태"].astype(str).str.strip() == "폐업"].copy()
     closed["폐업연도"] = pd.to_datetime(closed["폐업일자"], errors="coerce").dt.year
 
