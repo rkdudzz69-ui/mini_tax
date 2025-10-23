@@ -8,7 +8,7 @@ import streamlit as st
 st.set_page_config(page_title="전체 폐업자 현황", layout="wide")
 
 st.title("전체 폐업자 현황")
-st.caption("엑셀을 업로드하면 '사업자상태'가 '폐업'인 행만 뽑아 보여줘요. (데모: 주민번호 마스킹 없음)")
+st.caption("엑셀을 업로드하면 '사업자상태'가 '폐업'인 행만 추출됩니다.)
 
 # -------------------------
 # 예시 데이터 (업로드 없을 때 사용)
